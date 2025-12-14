@@ -23,11 +23,11 @@
 #### 1.1 从 Encoder-Decoder 到 Decoder-only 的演进风险
 
 早期的序列转换模型（如 Vaswani 等人提出的原始 Transformer [1]）采用 Encoder-Decoder 架构，
-![alt text](image-2.png)
+![alt text](images/image-2.png)
 其中编码器（Encoder）处理输入序列，解码器（Decoder）生成输出序列。在这种架构下，输入与输出在物理层面上是分离处理的。
 
 然而，现代主流 LLM（如 GPT 系列、Llama 系列）普遍采用了 **Decoder-only** 架构 [5]。
-![alt text](image-1.png)
+![alt text](images/image-1.png)
 这种设计上的转变虽然极大地提升了模型的生成能力和训练效率，但也带来了显著的安全副作用：**输入（Prompt）与输出（Generation）被压缩到了同一个线性序列中进行处理。**
 
 在 Decoder-only 架构中，系统提示词（System Prompt）、用户输入（User Input）和模型生成的历史（Model History）被统一视为“上下文（Context）”。模型在计算过程中，不再区分信息的来源属性，仅依据 Token 在序列中的位置进行处理。这种架构上的“单通道”特性，为恶意指令混入处理流提供了物理基础。
@@ -43,7 +43,7 @@ p(x) = \prod_{i=1}^{n} p(s_n|s_1, \dots, s_{n-1})
 $$
 
 其中 $\Theta$ 为模型参数。
-![alt text](image-3.png)
+![alt text](images/image-3.png)
 
 **机制与攻击的联系：**
 此公式表明，模型预测第 $i$ 个 Token ($x_i$) 时，完全依赖于前序所有 Token ($x_{<i}$) 的联合分布。
@@ -59,7 +59,7 @@ $$
 在 Transformer 层内部，输入序列被映射为 Query ($Q$)、Key ($K$) 和 Value ($V$) 向量。注意力分数的计算公式如下 [1]：
 
 $$ \text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V $$
-![alt text](image-4.png)![alt text](image-5.png)
+![alt text](images/image-4.png)![alt text](images/image-5.png)
 
 在该计算过程中：
 1.  **无类型区分**：所有 Token（无论是来自开发者的 System Prompt 还是用户的 Malicious Payload）均被映射为同维度的向量。矩阵乘法 $QK^T$ 仅计算向量间的语义相关性（Similarity），不包含任何关于“指令权限”或“来源可信度”的元数据标签。
@@ -90,7 +90,7 @@ $$ \text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right
         # 没有任何参数用于标识哪些 ID 属于“高权限区”，哪些属于“低权限区”。
         inputs_embeds: torch.Tensor = self.embed_tokens(input_ids)
 ```
-![alt text](image-6.png)
+![alt text](images/image-6.png)
 **分析结论**：
 代码证实了 `input_ids` 是被作为整体传入的。模型在 Embedding 层仅完成了“符号到向量”的转换，此时 System 指令和 User Payload 在数学表达上已经完全平等，不存在类似于操作系统内核态/用户态的物理隔离位（Bit）。
 
@@ -134,7 +134,7 @@ def create_causal_mask(
     )
     return causal_mask
 ```
-![alt text](image-9.png)
+![alt text](images/image-9.png)
 
 **代码片段 B：掩码的原子逻辑 (Atomic Logic)**
 **source:** https://github.com/huggingface/transformers/blob/main/src/transformers/masking_utils.py#L770
@@ -150,7 +150,7 @@ def causal_mask_function(batch_idx: int, head_idx: int, q_idx: int, kv_idx: int)
     # 只要满足时间先后顺序，注意力通路就是完全敞开的。
     return kv_idx <= q_idx
 ```
-![alt text](image-10.png)
+![alt text](images/image-10.png)
 
 **深度解读（简述版）**：
 
@@ -236,7 +236,7 @@ $$ \text{objective}(\phi) = \mathbb{E}_{(x,y) \sim D_{\pi_\phi^{\text{RL}}}} \le
 
 在攻击场景下，攻击者通过加长 Context、增加逻辑复杂度，人为地提升了目标 A 在上下文中的权重。由于 RM 只是一个在有限数据上训练的**代理（Proxy）**，它无法处理这种权重的动态变化，导致模型为了追求所谓的“有用性”和“连贯性”（符合 KL 约束），最终选择了牺牲安全性。
 
-![alt text](image-11.png) source:[4]
+![alt text](images/image-11.png) source:[4]
 
 #### 2.2 分布外 (OOD) 泛化失效与对抗攻击原理
 
@@ -264,9 +264,9 @@ $$ \text{objective}(\phi) = \mathbb{E}_{(x,y) \sim D_{\pi_\phi^{\text{RL}}}} \le
 
 ### 4.流程图
 知乎：https://zhuanlan.zhihu.com/p/1980224366202598381
-![alt text](image-12.png)
+![alt text](images/image-12.png)
 https://arxiv.org/pdf/2306.05499
-![alt text](image-13.png)
+![alt text](images/image-13.png)
 
 ### 5. 建议验证实验 (Proposed Experiments)
 

@@ -15,14 +15,14 @@
 
 ### 1.大预言模型提示词攻击防御方案分类
 
-随着大语言模型（LLM）的广泛应用，针对其安全对齐机制的攻击手段（如Jailbreak、Prompt Injection）层出不穷。攻击者通过构造对抗性后缀、利用角色扮演或插入触发词来诱导模型输出有害内容。本文将常见防御方案归纳为四大类：**提示词微调与前缀防御**、**输入纯化与重构**、**检测与认证机制** 以及**检测与架构隔离**。
+随着大语言模型（LLM）的广泛应用，针对其安全对齐机制的攻击手段（如Jailbreak、Prompt Injection）层出不穷。攻击者通过构造对抗性后缀、利用角色扮演或插入触发词来诱导模型输出有害内容。本文将
 
 #### 1.1 提示词微调与前缀防御 (Prompt Tuning & Prefix Defense)
 
 **来源文献：** Fight Back Against Jailbreaking Via Prompt Adversarial Tuning [1]
 
 该类方法的核心思想是不改变模型参数，而是通过优化一个“防御性前缀”或“系统提示词”，使其能够抵消攻击性指令的影响。
-	![[Pasted image 20251210154105.png]]
+	![[image/Pasted image 20251210154105.png]]
 - **图解描述：** 图中展示了推理阶段的流水线。
     - Unprotected LLM: 用户输入攻击Prompt -> 模型输出炸弹制作教程。
     - Protected LLM via PAT: 系统自动将 **{Defense Control}** 拼接到用户Prompt前 -> 模型输出 "I'm sorry..."。
@@ -33,7 +33,7 @@
 	PAT 的核心在于**双层优化（Bi-level Optimization）**。它不微调整个模型，而是训练一个“防御前缀”（Defense Control）。训练过程模拟了一场博弈：
 	1. **攻击者视角（更新攻击后缀）：** 固定防御前缀，寻找能让模型**突破防御**、输出有害内容的攻击后缀（类似 GCG 攻击算法）。
 	2. **防御者视角（更新防御前缀）：** 固定刚才生成的强力攻击后缀，寻找能让模型**拒绝回答**（输出 "I am sorry"）且能正常回答良性问题的防御前缀。
-    ![[Pasted image 20251210153613.png]]
+    ![[image/Pasted image 20251210153613.png]]
 	通过这种反复迭代，防御前缀“见过”了各种强大的攻击形式，从而获得了极强的鲁棒性。
 	
 	**目标：** 使模型在面对恶意攻击时输出拒绝响应（如 "I am sorry..."），而在面对正常查询时保持原有响应。
@@ -69,7 +69,7 @@ def PAT_Training(harmful_data, benign_data, defense_control, attack_control, ite
 
 * **抵御攻击的可能性分析：**
 	- **防御效果：** 极高。实验显示，在Vicuna-7B和Llama-2上，PAT将高级攻击（如GCG, AutoDAN）的攻击成功率（ASR）降至接近 **0%**。
-		![[Pasted image 20251210154248.png]]
+		![[image/Pasted image 20251210154248.png]]
 	- **优势：** 部署成本极低（只需加前缀），不影响模型推理效率。
 	- **局限：** 对抗性训练过程较慢，且如果攻击者知道防御前缀的具体内容，可能会进行针对性的自适应攻击（Adaptive Attack）。
 
@@ -87,7 +87,7 @@ def PAT_Training(harmful_data, benign_data, defense_control, attack_control, ite
     对抗性 Prompt（尤其是像 GCG 这种生成的乱码后缀）是非常**脆弱**的。它们依赖于特定的 Token 组合来触发模型的 Bug。
 	- **机制：** TAPDA 利用 LLM 的能力，对输入 Prompt 进行**随机掩码（Masking）**，然后让模型填空（Predict），试图恢复原句。
 	- **效果：** 对于正常的语义句子，填空能恢复原意；但对于对抗性后缀，随机掩码和重构会**破坏其精心设计的攻击结构**。最后通过投票（Voting）和困惑度（PPL）筛选出最通顺（PPL最低）的 Prompt，这通常就是去除了攻击性的 Prompt。
-	![[Pasted image 20251210161145.png]]
+	![[image/Pasted image 20251210161145.png]]
 - **图解描述：**
     - 输入：Malicious Instruction + Adversarial Suffix (红色块)。
     - 处理：生成n个 Masked prompts (例如把后缀里的词 Mask 掉)。
@@ -95,7 +95,7 @@ def PAT_Training(harmful_data, benign_data, defense_control, attack_control, ite
     - 筛选：计算 `SvotingSvoting​`(投票分) 和`SPPLSPPL​`(困惑度分)。
     - 输出：Purified Prompt (此时红色的对抗后缀已经被破坏或替换成了无害内容)。
 
-	![[Pasted image 20251210162145.png]]
+	![[image/Pasted image 20251210162145.png]]
 *  **实现逻辑 (伪代码)：**
 	基于TAPDA: Text Adversarial Purification as Defense Against Adversarial Prompt Attack for Large Language Models中的Algorithm 1:
 ```python
@@ -122,7 +122,7 @@ def TAPDA(prompt P, num_samples n, mask_ratio):
 
 - **抵御攻击的可能性分析：**
     - **防御效果：** 中等到高。对于 AdvPrompter 攻击，ASR 从 72.6% 降至 **33.9%**；对于 AutoDAN 和 GCG 也有显著效果。
-	    ![[Pasted image 20251210162311.png]]
+	    ![[image/Pasted image 20251210162311.png]]
     - **优势：** 保持了 Prompt 的可读性，不需要额外的外部模型，利用 LLM 自身能力。
     - **局限：** 推理延迟较高（需要多次预测和聚合），对于语义极其敏感的 Prompt 可能会改变原意。
 
@@ -139,9 +139,9 @@ def TAPDA(prompt P, num_samples n, mask_ratio):
 - **原理：**  
 	UniGuardian 利用了对抗攻击的一个弱点：**敏感性**。
     UniGuardian 定义了“提示触发攻击”（Prompt Trigger Attacks, PTA）。它发现，如果输入中包含触发攻击的关键词（Trigger），移除这些词会导致模型生成的 Loss 发生剧烈变化（高 Z-score）。  
-    ![[Pasted image 20251210164351.png]]
+    ![[image/Pasted image 20251210164351.png]]
     **方法：** 随机掩盖输入中的单词，观察 Loss 的变化。如果掩盖某些词导致 Loss 异常波动，则判定为恶意输入。采用 "Single-Forward Strategy" 提高效率。
-    ![[Pasted image 20251210164650.png]]
+    ![[image/Pasted image 20251210164650.png]]
 	 **图解描述：**
         -  图 2(b) 展示了 **Trigger Detection**  过程：通过 "Randomly Generate Index Tuples" 生成掩码，计算 `Z-Scores of Si​`。
         - 图 2(c) 展示了 **Single-Forward Strategy**：为了快，它把原始 Prompt 和所有掩码后的 Prompt 拼成一个大 Batch，做一次前向传播就算出结果，不用跑很多次。
@@ -155,7 +155,7 @@ def TAPDA(prompt P, num_samples n, mask_ratio):
 
 - **抵御攻击的可能性分析：**
     - **防御效果：** 极高。在 Prompt Injection 和 Backdoor 攻击上表现都很好，尤其在面对Backdoor攻击时，AUROC 接近 **0.99**。
-	    ![[Pasted image 20251210185405.png]]
+	    ![[image/Pasted image 20251210185405.png]]
     - **优势：** 无需训练（Training-free），通用性强（同时防御后门、对抗攻击和提示注入）。
     - **局限：** 需要访问模型的 Logits（白盒或灰盒），纯黑盒 API 可能无法使用。
 
@@ -168,15 +168,15 @@ def TAPDA(prompt P, num_samples n, mask_ratio):
 	攻击者通常是在一个有害指令（比如“制造炸弹”）后面加一段乱码后缀。
 	- **机制：** 防御者不需要知道哪部分是后缀。防御者只需要**逐个长度擦除**输入的末尾。
 	- **逻辑：** 假设攻击后缀长度不超过 `d`。从删去1个字符开始，一直试到删去 `d`个字符。在这个过程中，必然有一次，会**恰好把攻击后缀删干净**，只剩下原始的有害指令（“制造炸弹”）。此时，安全过滤器（Safety Filter）一定能识别出这是有害的，从而拦截请求。
-    ![[Pasted image 20251210190716.png]]
+    ![[image/Pasted image 20251210190716.png]]
 	- **图解描述：**  
     图中展示了一个具体的例子：
     - Input: "Harmful Prompt" + "Adversarial Tokens" (蓝色+红色块)
     - Process: **Erase**（逐行擦除末尾的红色块） -> **Check** (送入 Safety Filter) -> **Result** (只要有一行由 Safety Filter 报红，最终结果就是 Harmful)。
 
-	![[Pasted image 20251210190821.png]]
+	![[image/Pasted image 20251210190821.png]]
 * **实现逻辑 (伪代码)：**  
-	基于文中 Algorithm 1:
+	
 	```python
 	def Erase_and_Check(prompt P, max_erase_length d, safety_filter):
     # 1. 检查原始 Prompt
@@ -215,7 +215,7 @@ def TAPDA(prompt P, num_samples n, mask_ratio):
     - **LLM-2 (Response Generator):** 负责基于知识库生成回答。配合 mTLS 和 JWT 等网络层安全措施。
 
 - **实现逻辑 (架构描述)：**
-	![[Pasted image 20251210192008.png]]
+	![[image/Pasted image 20251210192008.png]]
     1. **路由层：** 接收用户 Query。
     2. **LLM-1 分析：** 使用专门的 Prompt（包含 Few-shot 攻击示例）判断 Query 是否包含 Prompt Injection、Jailbreak 或垃圾信息。
     3. **分支处理：**
@@ -226,7 +226,7 @@ def TAPDA(prompt P, num_samples n, mask_ratio):
 
 - **抵御攻击的可能性分析：**
     - **防御效果：** 在真实世界的大学聊天机器人部署中，拦截了 **100%** 的已知攻击（180次尝试），误报率仅 0.28%。
-	    ![[Pasted image 20251210192356.png]]
+	    ![[image/Pasted image 20251210192356.png]]
     - **优势：** 架构清晰，易于工程落地，隔离了风险（LLM-2 不会接触恶意 Prompt）。
     - **局限：** 增加了系统延迟（Latency 增加了约 18%）和 API 调用成本（双倍 Token 消耗）。
 
